@@ -1,6 +1,6 @@
-# Slack Reaction Users Fetcher
+# Slack Reactors
 
-A command-line tool to fetch a list of users who reacted with a specific emoji to a Slack message.
+An easy Python script to fetch a list of users who reacted with a specific emoji to a Slack message.
 
 ## Features
 
