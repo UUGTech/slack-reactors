@@ -1,9 +1,13 @@
 import argparse
+import asyncio
 import os
+from typing import List
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from slack_sdk.web.async_client import AsyncWebClient
 from tqdm import tqdm
+from tqdm.asyncio import tqdm_asyncio
 
 """
 Script to get a list of users who reacted with a specific emoji to a Slack message
@@ -17,7 +21,7 @@ Environment variables:
     SLACK_BOT_TOKEN: Slack Bot User OAuth Token
 
 Run pip install to install the required packages:
-    pip install slack-sdk tqdm
+    pip install slack-sdk tqdm aiohttp
 
 How to get the message timestamp:
     1. Copy the message link
@@ -33,7 +37,31 @@ How to get the message timestamp:
 SLACK_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 
 
-def get_reaction_users(channel_id, timestamp, reaction_name):
+async def get_user_name(client: AsyncWebClient, user_id: str) -> str:
+    """
+    Get a user's display name, real name, or user ID
+
+    Args:
+        client (AsyncWebClient): Slack client
+        user_id (str): User ID to fetch info for
+
+    Returns:
+        str: User's display name, real name, or user ID
+    """
+    user_info = await client.users_info(user=user_id)
+    if user_info["ok"]:
+        if "display_name" in user_info["user"]["profile"]:
+            return user_info["user"]["profile"]["display_name"]
+        elif "real_name" in user_info["user"]["profile"]:
+            return user_info["user"]["profile"]["real_name"]
+        else:
+            return user_info["user"]["name"]
+    return user_id
+
+
+async def get_reaction_users(
+    channel_id: str, timestamp: str, reaction_name: str
+) -> List[str]:
     """
     Get a list of users who reacted with a specific emoji to a message
 
@@ -45,14 +73,14 @@ def get_reaction_users(channel_id, timestamp, reaction_name):
     Returns:
         list: List of usernames who reacted
     """
-    client = WebClient(token=SLACK_TOKEN)
+    client = AsyncWebClient(token=SLACK_TOKEN)
 
     try:
         # Get reaction information (for public channels, can be retrieved without joining)
         print(
             f"Fetching reactions for message in channel {channel_id} at timestamp {timestamp}"
         )
-        result = client.reactions_get(channel=channel_id, timestamp=timestamp)
+        result = await client.reactions_get(channel=channel_id, timestamp=timestamp)
 
         # Loop through all reactions in the message
         message = result["message"]
@@ -62,28 +90,14 @@ def get_reaction_users(channel_id, timestamp, reaction_name):
                     # Get list of user IDs
                     user_ids = reaction["users"]
 
-                    # Convert to list of usernames
-                    user_names = []
+                    # Convert to list of usernames in parallel
                     print(
                         f"Fetching usernames for {len(user_ids)} users who reacted with :{reaction_name}:"
                     )
-                    for user_id in tqdm(user_ids, desc="Fetching user info"):
-                        user_info = client.users_info(user=user_id)
-                        if user_info["ok"]:
-                            # Get user's display name
-                            if "display_name" in user_info["user"]["profile"]:
-                                user_names.append(
-                                    user_info["user"]["profile"]["display_name"]
-                                )
-                            elif "real_name" in user_info["user"]["profile"]:
-                                # Use real_name if display name is not set
-                                user_names.append(
-                                    user_info["user"]["profile"]["real_name"]
-                                )
-                            else:
-                                # Fallback to user ID if neither display name nor real name is set
-                                user_names.append(user_info["user"]["name"])
-
+                    tasks = [get_user_name(client, user_id) for user_id in user_ids]
+                    user_names = await tqdm_asyncio.gather(
+                        *tasks, desc="Fetching user info"
+                    )
                     return user_names
 
         return []
@@ -164,7 +178,7 @@ def parse_args():
     return args
 
 
-def main():
+async def main():
     args = parse_args()
 
     if not SLACK_TOKEN:
@@ -172,7 +186,7 @@ def main():
         return
 
     try:
-        users = get_reaction_users(args.channel, args.timestamp, args.reaction)
+        users = await get_reaction_users(args.channel, args.timestamp, args.reaction)
         if users:
             print(f"\nUsers who reacted ({len(users)}):")
             for user in users:
@@ -184,4 +198,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
