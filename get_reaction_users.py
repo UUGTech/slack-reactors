@@ -194,8 +194,8 @@ async def main():
         users = await get_reaction_users(args.channel, args.timestamp, args.reaction)
         sorted_users = sorted(users)
         if users:
-            print(f"\nUsers who reacted ({len(users)}):")
-            for user in users:
+            print(f"\nUsers who reacted ({len(sorted_users)}):")
+            for user in sorted_users:
                 print(f"- {user}")
         else:
             print(f"No users found who reacted with :{args.reaction}:")
