@@ -84,6 +84,7 @@ async def get_reaction_users(
 
         # Loop through all reactions in the message
         message = result["message"]
+        print(f"The meessage content: {message['text']}")
         if "reactions" in message:
             for reaction in message["reactions"]:
                 if reaction["name"] == reaction_name:
@@ -119,14 +120,18 @@ def parse_slack_url(url):
     Args:
         url (str): Slack message URL
             Example: https://workspace.slack.com/archives/C0123456789/p1234567890123456
+            Also supports thread URLs: https://workspace.slack.com/archives/C0123456789/p1234567890123456?thread_ts=1234567890.123456
 
     Returns:
         tuple: (channel_id, timestamp)
             Example: ("C0123456789", "1234567890.123456")
     """
     try:
+        # Strip any query parameters for base URL parsing
+        base_url = url.split("?")[0]
+
         # Extract channel ID and timestamp parts from URL
-        parts = url.split("/")
+        parts = base_url.split("/")
         channel_id = next(p for p in parts if p.startswith("C"))
         ts_part = next(p for p in parts if p.startswith("p"))
 
@@ -187,6 +192,7 @@ async def main():
 
     try:
         users = await get_reaction_users(args.channel, args.timestamp, args.reaction)
+        sorted_users = sorted(users)
         if users:
             print(f"\nUsers who reacted ({len(users)}):")
             for user in users:
